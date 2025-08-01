@@ -11,20 +11,31 @@ DXApplication* GetDxAppPtr(HWND hwnd) {
 
 void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
     // --- ウィンドウクラス生成 ---
+
     WNDCLASSEX windowClass = {};
     windowClass.cbSize = sizeof(WNDCLASSEX);
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = WindowProc;
+    windowClass.cbClsExtra = 0;
+    windowClass.cbWndExtra = 0;
     windowClass.hInstance = hInstance;
-    windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    windowClass.lpszClassName = _T("DXSampleClass");
-    RegisterClassEx(&windowClass);
+    windowClass.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    windowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    windowClass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    windowClass.lpszMenuName = nullptr;
+    windowClass.lpszClassName = L"DXSampleClass";
+    windowClass.hIconSm = LoadIcon(nullptr, IDI_APPLICATION);
+
+    // ★★ クラス登録を忘れずに！ ★★
+    if (!RegisterClassEx(&windowClass)) {
+        MessageBoxW(nullptr, L"RegisterClassEx failed", L"Error", MB_OK);
+        return ;
+    }
 
     // --- ウィンドウサイズ調整 ---
     RECT windowRect = { 0, 0, dxApp->GetWindowWidth(), dxApp->GetWindowHeight() };
     AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, false);
 
-    // --- ウィンドウ生成 ---
     HWND hwnd = CreateWindow(
         windowClass.lpszClassName,
         dxApp->GetTitle(),
@@ -33,7 +44,13 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
         CW_USEDEFAULT,
         windowRect.right - windowRect.left,
         windowRect.bottom - windowRect.top,
-        nullptr, nullptr, hInstance, nullptr);
+        nullptr, nullptr, hInstance, nullptr
+    );
+
+    if (!hwnd) {
+        MessageBoxW(nullptr, L"CreateWindow failed", L"Error", MB_OK);
+        return ;
+    }
 
     // DXApplicationポインタをユーザーデータにセット
     SetDxAppPtr(hwnd, dxApp);
