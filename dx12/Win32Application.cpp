@@ -59,8 +59,8 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
     dxApp->OnInit(hwnd);
 
     // テクスチャ初期化やBGM読み込みはここでやる
-    dxApp->InitializeTexture(L"Assets/Image/mura.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
-    dxApp->InitializeTexture(L"Assets/Image/kenshi.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
+    dxApp->InitializeTexture(L"mura", L"Assets/Image/mura.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
+    dxApp->InitializeTexture(L"kenshi",L"Assets/Image/kenshi.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
 
     if (!dxApp->engine_.Initialize()) {
         wprintf(L"初期化失敗\n");
@@ -101,6 +101,7 @@ LRESULT CALLBACK Win32Application::WindowProc(HWND hwnd, UINT message, WPARAM wp
         DXApplication* dxApp = GetDxAppPtr(hwnd);
         if (dxApp) {
             dxApp->engine_.PlaySE(L"click");
+            dxApp->SetTextureVisible(L"kenshi", !dxApp->GetTextureVisible(L"kenshi"));
         }
         return 0;
     }

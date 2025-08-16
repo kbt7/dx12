@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <tchar.h>
 #include <string>
+#include <unordered_map>
 
 #include <initguid.h>
 #include <d3d12.h>
@@ -31,13 +32,17 @@ public:
 	void OnRender();
 	void OnDestroy();
 
-	void SetTexturePosition(size_t index, float x, float y, float width, float height);
-	void InitializeTexture(const std::wstring& filepath, float x, float y, float width, float height);
-	void SetTextureRotation(size_t index, float radians);
+	void SetTexturePosition(const std::wstring& key, float x, float y, float width, float height);
+	void InitializeTexture(const std::wstring& key, const std::wstring& filepath, float x, float y, float width, float height);
+	void SetTextureRotation(const std::wstring& key, float radians);
 	
 	const WCHAR* GetTitle() const { return title_.c_str(); }
 	unsigned int GetWindowWidth() const { return windowWidth_; }
 	unsigned int GetWindowHeight() const { return windowHeight_; }
+
+	bool GetTextureVisible(const std::wstring& key);
+	void SetTextureVisible(const std::wstring& key, bool visible);
+	void ReleaseTexture(const std::wstring& key);
 
 	AudioEngine engine_;
 
@@ -93,24 +98,21 @@ private:
 	
 	struct TextureResource {
 		ComPtr<ID3D12Resource> texture;
-		D3D12_GPU_DESCRIPTOR_HANDLE srvHandle;
-		D3D12_VERTEX_BUFFER_VIEW vertexView;
-		D3D12_INDEX_BUFFER_VIEW indexView;
-		ComPtr<ID3D12Resource> constantBuffer;
 		ComPtr<ID3D12Resource> vertexBuffer;
 		ComPtr<ID3D12Resource> indexBuffer;
-		DirectX::XMMATRIX transformMatrix;
-
+		ComPtr<ID3D12Resource> constantBuffer;
+		D3D12_VERTEX_BUFFER_VIEW vertexView;
+		D3D12_INDEX_BUFFER_VIEW indexView;
+		D3D12_GPU_DESCRIPTOR_HANDLE srvHandle;
 		float x, y, width, height;
-
-		// 変換行列
+		DirectX::XMMATRIX transformMatrix;
 		DirectX::XMMATRIX scaleMatrix;
 		DirectX::XMMATRIX rotationMatrix;
 		DirectX::XMMATRIX translationMatrix;
-
+		bool visible = true; // 表示切替フラグ
 	};
 
-	void InitializeTextureTransform(size_t index);
+	void InitializeTextureTransform(const std::wstring& key);
 
-	std::vector<TextureResource> textures_;
+	std::unordered_map<std::wstring, TextureResource> textures_;
 };

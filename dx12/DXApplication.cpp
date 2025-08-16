@@ -240,13 +240,14 @@ void DXApplication::OnRender()
 	ID3D12DescriptorHeap* ppHeaps[] = { basicHeap_.Get() };
 	commandList_->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	for (size_t i = 0; i < textures_.size(); ++i) {
-		commandList_->SetGraphicsRootConstantBufferView(1, textures_[i].constantBuffer->GetGPUVirtualAddress());
+	for (auto& [key, tex] : textures_) {
+		if (!tex.visible) continue;
 
+		commandList_->SetGraphicsRootConstantBufferView(1, tex.constantBuffer->GetGPUVirtualAddress());
 		commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		commandList_->IASetVertexBuffers(0, 1, &textures_[i].vertexView);
-		commandList_->IASetIndexBuffer(&textures_[i].indexView);
-		commandList_->SetGraphicsRootDescriptorTable(0, textures_[i].srvHandle);
+		commandList_->IASetVertexBuffers(0, 1, &tex.vertexView);
+		commandList_->IASetIndexBuffer(&tex.indexView);
+		commandList_->SetGraphicsRootDescriptorTable(0, tex.srvHandle);
 		commandList_->DrawIndexedInstanced(6, 1, 0, 0, 0);
 	}
 
@@ -325,22 +326,29 @@ void DXApplication::ThrowIfFailed(HRESULT hr)
 	}
 }
 
-void DXApplication::InitializeTexture(const std::wstring& filepath, float x, float y, float width, float height)
+void DXApplication::InitializeTexture(
+	const std::wstring& key,
+	const std::wstring& filepath,
+	float x, float y, float width, float height)
 {
 	using namespace DirectX;
 
-	// 画像読み込み
+	// 既に同じキーが存在する場合は上書きせず終了
+	if (textures_.find(key) != textures_.end()) {
+		return;
+	}
+
+	// 読み込み関連
 	TexMetadata metadata = {};
 	ScratchImage scratchImg = {};
 	TextureResource resource = {};
 	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+
 	ThrowIfFailed(LoadFromWICFile(filepath.c_str(), WIC_FLAGS_FORCE_RGB, &metadata, scratchImg));
 	ThrowIfFailed(PrepareUpload(device_.Get(), scratchImg.GetImages(), scratchImg.GetImageCount(), metadata, subresources));
 
-	// テクスチャリソース生成
+	// GPUテクスチャリソース作成
 	ComPtr<ID3D12Resource> texture;
-
-	// 一時オブジェクトは変数に入れること
 	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	auto textureDesc = CD3DX12_RESOURCE_DESC::Tex2D(
 		DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -359,7 +367,6 @@ void DXApplication::InitializeTexture(const std::wstring& filepath, float x, flo
 	// アップロードバッファ
 	ComPtr<ID3D12Resource> uploadBuffer;
 	UINT64 uploadBufferSize = GetRequiredIntermediateSize(texture.Get(), 0, 1);
-
 	auto uploadHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
 
@@ -372,10 +379,9 @@ void DXApplication::InitializeTexture(const std::wstring& filepath, float x, flo
 		IID_PPV_ARGS(uploadBuffer.ReleaseAndGetAddressOf())
 	));
 
-	// 定数バッファの作成
+	// 定数バッファ
 	auto cbHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(XMMATRIX));
-
 	ThrowIfFailed(device_->CreateCommittedResource(
 		&cbHeapProps,
 		D3D12_HEAP_FLAG_NONE,
@@ -385,7 +391,7 @@ void DXApplication::InitializeTexture(const std::wstring& filepath, float x, flo
 		IID_PPV_ARGS(resource.constantBuffer.ReleaseAndGetAddressOf())
 	));
 
-	// 転送命令
+	// 転送処理
 	ThrowIfFailed(commandAllocator_->Reset());
 	ThrowIfFailed(commandList_->Reset(commandAllocator_.Get(), pipelinestate_.Get()));
 	UpdateSubresources(commandList_.Get(), texture.Get(), uploadBuffer.Get(), 0, 0, subresources.size(), subresources.data());
@@ -398,23 +404,26 @@ void DXApplication::InitializeTexture(const std::wstring& filepath, float x, flo
 	commandQueue_->ExecuteCommandLists(_countof(lists), lists);
 	WaitForGpu();
 
-	// シェーダーリソースビュー作成
+	// SRV作成
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.Texture2D.MipLevels = 1;
 
+	size_t index = textures_.size(); // 既存登録数で割り当て位置決定
 	auto handle = basicHeap_->GetCPUDescriptorHandleForHeapStart();
-	handle.ptr += textures_.size() * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	handle.ptr += index * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	device_->CreateShaderResourceView(texture.Get(), &srvDesc, handle);
+
+	resource.srvHandle = basicHeap_->GetGPUDescriptorHandleForHeapStart();
+	resource.srvHandle.ptr += index * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	// 頂点データ
 	float left = x;
 	float right = x + width;
 	float top = y;
 	float bottom = y + height;
-
 	Vertex vertices[] = {
 		{{ left,  bottom, 0.0f }, { 0.0f, 1.0f }},
 		{{ left,  top,    0.0f }, { 0.0f, 0.0f }},
@@ -422,16 +431,10 @@ void DXApplication::InitializeTexture(const std::wstring& filepath, float x, flo
 		{{ right, top,    0.0f }, { 1.0f, 0.0f }},
 	};
 
-	// バッファ作成
-	resource.texture = texture;
-	resource.srvHandle = basicHeap_->GetGPUDescriptorHandleForHeapStart();
-	resource.srvHandle.ptr += textures_.size() * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
 	// 頂点バッファ
 	UINT vbSize = sizeof(vertices);
 	auto vbHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto vbDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
-
 	ThrowIfFailed(device_->CreateCommittedResource(
 		&vbHeapProps,
 		D3D12_HEAP_FLAG_NONE,
@@ -454,7 +457,6 @@ void DXApplication::InitializeTexture(const std::wstring& filepath, float x, flo
 	UINT ibSize = sizeof(indices);
 	auto ibHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto ibDesc = CD3DX12_RESOURCE_DESC::Buffer(ibSize);
-
 	ThrowIfFailed(device_->CreateCommittedResource(
 		&ibHeapProps,
 		D3D12_HEAP_FLAG_NONE,
@@ -471,7 +473,7 @@ void DXApplication::InitializeTexture(const std::wstring& filepath, float x, flo
 	resource.indexView.SizeInBytes = ibSize;
 	resource.indexView.Format = DXGI_FORMAT_R16_UINT;
 
-	// マトリックス設定（2D描画用）
+	// 初期トランスフォーム
 	XMMATRIX matrix = XMMatrixIdentity();
 	matrix.r[0].m128_f32[0] = 2.0f / windowWidth_;
 	matrix.r[1].m128_f32[1] = -2.0f / windowHeight_;
@@ -479,20 +481,24 @@ void DXApplication::InitializeTexture(const std::wstring& filepath, float x, flo
 	matrix.r[3].m128_f32[1] = 1.0f;
 	resource.transformMatrix = matrix;
 
-	// 定数バッファへ行列を書き込む
 	void* cbMapped = nullptr;
 	resource.constantBuffer->Map(0, nullptr, &cbMapped);
 	memcpy(cbMapped, &resource.transformMatrix, sizeof(XMMATRIX));
 	resource.constantBuffer->Unmap(0, nullptr);
 
+	// 情報格納
 	resource.x = x;
 	resource.y = y;
 	resource.width = width;
 	resource.height = height;
+	resource.texture = texture;
+	resource.visible = true;
 
-	textures_.push_back(resource);
+	// マップに登録
+	textures_[key] = std::move(resource);
 
-	InitializeTextureTransform(textures_.size() - 1);
+	// トランスフォーム初期化
+	InitializeTextureTransform(key);
 }
 
 void DXApplication::WaitForGpu()
@@ -508,110 +514,129 @@ void DXApplication::WaitForGpu()
 	}
 }
 
-void DXApplication::SetTexturePosition(size_t index, float x, float y, float width, float height)
+void DXApplication::SetTexturePosition(const std::wstring& key, float x, float y, float width, float height)
 {
-	if (index >= textures_.size()) return;
+	auto it = textures_.find(key);
+	if (it != textures_.end()) {
 
-	auto& resource = textures_[index];
+		// 座標情報を更新
+		it->second.x = x;
+		it->second.y = y;
 
-	// 座標情報を更新
-	resource.x = x;
-	resource.y = y;
+		// サイズ情報も更新（ここが重要）
+		it->second.width = width;
+		it->second.height = height;
 
-	// サイズ情報も更新（ここが重要）
-	resource.width = width;
-	resource.height = height;
+		// 頂点データ更新
+		float left = x;
+		float right = x + width;
+		float top = y;
+		float bottom = y + height;
 
-	// 頂点データ更新
-	float left = x;
-	float right = x + width;
-	float top = y;
-	float bottom = y + height;
+		Vertex vertices[] = {
+			{{ left,  bottom, 0.0f }, { 0.0f, 1.0f }},
+			{{ left,  top,    0.0f }, { 0.0f, 0.0f }},
+			{{ right, bottom, 0.0f }, { 1.0f, 1.0f }},
+			{{ right, top,    0.0f }, { 1.0f, 0.0f }},
+		};
 
-	Vertex vertices[] = {
-		{{ left,  bottom, 0.0f }, { 0.0f, 1.0f }},
-		{{ left,  top,    0.0f }, { 0.0f, 0.0f }},
-		{{ right, bottom, 0.0f }, { 1.0f, 1.0f }},
-		{{ right, top,    0.0f }, { 1.0f, 0.0f }},
-	};
+		void* mapped = nullptr;
+		it->second.vertexBuffer->Map(0, nullptr, &mapped);
+		memcpy(mapped, vertices, sizeof(vertices));
+		it->second.vertexBuffer->Unmap(0, nullptr);
 
-	void* mapped = nullptr;
-	resource.vertexBuffer->Map(0, nullptr, &mapped);
-	memcpy(mapped, vertices, sizeof(vertices));
-	resource.vertexBuffer->Unmap(0, nullptr);
-
-	// 位置とサイズを変えたらトランスフォームも更新する
-	InitializeTextureTransform(index);
+		// 位置とサイズを変えたらトランスフォームも更新する
+		InitializeTextureTransform(key);
+	}
 }
 
-void DXApplication::SetTextureRotation(size_t index, float radians)
+void DXApplication::SetTextureRotation(const std::wstring& key, float radians)
 {
 	using namespace DirectX;
 
-	if (index >= textures_.size()) return;
+	auto it = textures_.find(key);
+	if (it != textures_.end()) {
+		
+		// 中心座標（画像の左上から中心までのオフセット）
+		float centerX = it->second.x + it->second.width * 0.5f;
+		float centerY = it->second.y + it->second.height * 0.5f;
 
-	auto& resource = textures_[index];
+		// 回転のためのワールド行列（中心→回転→元に戻す）
+		XMMATRIX translateToOrigin = XMMatrixTranslation(-centerX, -centerY, 0.0f);
+		XMMATRIX rotation = XMMatrixRotationZ(radians);
+		XMMATRIX translateBack = XMMatrixTranslation(centerX, centerY, 0.0f);
 
-	// 中心座標（画像の左上から中心までのオフセット）
-	float centerX = resource.x + resource.width * 0.5f;
-	float centerY = resource.y + resource.height * 0.5f;
+		XMMATRIX worldMatrix = translateToOrigin * rotation * translateBack;
 
-	// 回転のためのワールド行列（中心→回転→元に戻す）
-	XMMATRIX translateToOrigin = XMMatrixTranslation(-centerX, -centerY, 0.0f);
-	XMMATRIX rotation = XMMatrixRotationZ(radians);
-	XMMATRIX translateBack = XMMatrixTranslation(centerX, centerY, 0.0f);
+		// 2Dビューはアイデンティティ
+		XMMATRIX viewMatrix = XMMatrixIdentity();
 
-	XMMATRIX worldMatrix = translateToOrigin * rotation * translateBack;
+		// 正射影プロジェクション（左上が (0,0)、右下が (width,height)）
+		XMMATRIX projMatrix = XMMatrixOrthographicOffCenterLH(
+			0.0f, static_cast<float>(windowWidth_),
+			static_cast<float>(windowHeight_), 0.0f,
+			0.0f, 1.0f
+		);
 
-	// 2Dビューはアイデンティティ
-	XMMATRIX viewMatrix = XMMatrixIdentity();
+		// 合成行列
+		it->second.transformMatrix = worldMatrix * viewMatrix * projMatrix;
 
-	// 正射影プロジェクション（左上が (0,0)、右下が (width,height)）
-	XMMATRIX projMatrix = XMMatrixOrthographicOffCenterLH(
-		0.0f, static_cast<float>(windowWidth_),
-		static_cast<float>(windowHeight_), 0.0f,
-		0.0f, 1.0f
-	);
-
-	// 合成行列
-	resource.transformMatrix = worldMatrix * viewMatrix * projMatrix;
-
-	// 定数バッファへ転送
-	void* mapped = nullptr;
-	resource.constantBuffer->Map(0, nullptr, &mapped);
-	memcpy(mapped, &resource.transformMatrix, sizeof(XMMATRIX));
-	resource.constantBuffer->Unmap(0, nullptr);
+		// 定数バッファへ転送
+		void* mapped = nullptr;
+		it->second.constantBuffer->Map(0, nullptr, &mapped);
+		memcpy(mapped, &it->second.transformMatrix, sizeof(XMMATRIX));
+		it->second.constantBuffer->Unmap(0, nullptr);
+	}
 }
 
-void DXApplication::InitializeTextureTransform(size_t index)
+void DXApplication::InitializeTextureTransform(const std::wstring& key)
 {
+	auto it = textures_.find(key);
+	if (it == textures_.end()) return;
+	auto& resource = it->second;
+
 	using namespace DirectX;
-
-	if (index >= textures_.size()) return;
-
-	auto& resource = textures_[index];
-
-	// スケーリング：ピクセル→NDC（Y軸は反転）
 	resource.scaleMatrix = XMMatrixScaling(
 		2.0f * resource.width / windowWidth_,
 		-2.0f * resource.height / windowHeight_,
 		1.0f
 	);
-
-	// 回転なし
 	resource.rotationMatrix = XMMatrixIdentity();
 
-	// 位置：ピクセル位置をNDCに変換
 	float centerX = resource.x + resource.width * 0.5f;
 	float centerY = resource.y + resource.height * 0.5f;
 	float ndcX = (2.0f * centerX / windowWidth_) - 1.0f;
 	float ndcY = 1.0f - (2.0f * centerY / windowHeight_);
 
 	resource.translationMatrix = XMMatrixTranslation(ndcX, ndcY, 0.0f);
-
-	// 合成
 	resource.transformMatrix =
-		resource.scaleMatrix *
-		resource.rotationMatrix *
-		resource.translationMatrix;
+		resource.scaleMatrix * resource.rotationMatrix * resource.translationMatrix;
+}
+
+bool DXApplication::GetTextureVisible(const std::wstring& key) {
+	auto it = textures_.find(key);
+	if (it != textures_.end()) {
+		return it->second.visible;
+	}
+	return false;
+}
+
+void DXApplication::SetTextureVisible(const std::wstring& key, bool visible)
+{
+	auto it = textures_.find(key);
+	if (it != textures_.end()) {
+		it->second.visible = visible;
+	}
+}
+
+void DXApplication::ReleaseTexture(const std::wstring& key)
+{
+	auto it = textures_.find(key);
+	if (it != textures_.end()) {
+		it->second.texture.Reset();
+		it->second.vertexBuffer.Reset();
+		it->second.indexBuffer.Reset();
+		it->second.constantBuffer.Reset();
+		textures_.erase(it);
+	}
 }
