@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DXApplication.h" // ★インクルードを追加
+#include "Button.h"
 
 class Win32Application
 {

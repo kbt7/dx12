@@ -58,6 +58,16 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
     // アプリ初期化
     dxApp->OnInit(hwnd);
 
+    enum GameState
+    {
+        TITLE,
+        PLAY,
+        PAUSE,
+        END,
+    };
+
+    GameState gs = GameState::TITLE;
+
     // テクスチャ初期化やBGM読み込みはここでやる
     dxApp->InitializeTexture(L"mura", L"Assets/Image/mura.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
     dxApp->InitializeTexture(L"kenshi",L"Assets/Image/kenshi.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
@@ -73,6 +83,8 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
     // 効果音読み込み（クリック用）
     dxApp->engine_.LoadSE(L"click", L"Assets/Audio/maou_se_system49.mp3");
     dxApp->engine_.SetVolumeForSE(L"click", 1.0f);
+
+    Button title(L"titleButton", 0.0f, 0.0f, 300, 300, [&gs]() { gs = GameState::PLAY; });
 
     ShowWindow(hwnd, SW_SHOW);
 
@@ -101,7 +113,6 @@ LRESULT CALLBACK Win32Application::WindowProc(HWND hwnd, UINT message, WPARAM wp
         DXApplication* dxApp = GetDxAppPtr(hwnd);
         if (dxApp) {
             dxApp->engine_.PlaySE(L"click");
-            dxApp->SetTextureVisible(L"kenshi", !dxApp->GetTextureVisible(L"kenshi"));
         }
         return 0;
     }
