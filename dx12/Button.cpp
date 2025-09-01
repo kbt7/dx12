@@ -1,13 +1,44 @@
 #include "Button.h"
 
-Button::Button(const std::wstring& key, float x, float y, float width, float height, std::function<void()> fn)
-	: key(key), x(x), y(y), width(width), height(height), click(fn) {
+Button::Button(const std::wstring& key, const std::wstring& imagePass, float x, float y, float width, float height, std::function<void()> fn)
+	: key(key), imagePass(imagePass), x(x), y(y), width(width), height(height), click(fn) {
 }
 
-void Button::Chack() {
-	click();
+void Button::Chack(HWND hwnd) {
+	POINT pt;
+	GetCursorPos(&pt);
+	ScreenToClient(hwnd, &pt);
+	if ((x < pt.x && pt.x < x + width) && (y < pt.y && pt.y < y + height)) {
+		click();
+		MessageBoxW(
+			nullptr,             // 親ウィンドウのハンドル（不要なら nullptr）
+			key.c_str(),        // メッセージ本文（const wchar_t*）
+			L"debug",       // タイトル（const wchar_t*）
+			MB_OK | MB_ICONINFORMATION // ボタンやアイコンの種類
+		);
+	}
 }
 
 std::wstring Button::getKey() {
 	return key;
+}
+
+std::wstring Button::getImagePass() {
+	return imagePass;
+}
+
+float Button::getX() {
+	return x;
+}
+
+float Button::getY() {
+	return y;
+}
+
+float Button::getWidth() {
+	return width;
+}
+
+float Button::getHeight() {
+	return height;
 }

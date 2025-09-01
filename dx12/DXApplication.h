@@ -16,7 +16,9 @@
 #include "d3dx12.h"
 #include <stdexcept>
 #include <vector>
+#include <map>
 #include "AudioEngine.h"
+#include "Button.h"
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib,"d3dcompiler.lib")
@@ -33,7 +35,7 @@ public:
 	void OnDestroy();
 
 	void SetTexturePosition(const std::wstring& key, float x, float y, float width, float height);
-	void InitializeTexture(const std::wstring& key, const std::wstring& filepath, float x, float y, float width, float height);
+	void InitializeTexture(const std::wstring& key, const std::wstring& filepath, float x, float y, float width, float height, float alpha);
 	void SetTextureRotation(const std::wstring& key, float radians);
 	
 	const WCHAR* GetTitle() const { return title_.c_str(); }
@@ -45,7 +47,7 @@ public:
 	void ReleaseTexture(const std::wstring& key);
 
 	AudioEngine engine_;
-
+	std::map<std::wstring, Button> buttons;
 private:
 	static const unsigned int kFrameCount = 2;
 
@@ -64,6 +66,10 @@ private:
 	ComPtr<IDXGISwapChain4> swapchain_;
 	ComPtr<ID3D12DescriptorHeap> rtvHeaps_;             // レンダーターゲットヒープ
 	ComPtr<ID3D12DescriptorHeap> basicHeap_; // ★追加
+
+	UINT descriptorSizeCBVSRV_ = 0; // 追加: ディスクリプタ増分サイズ
+	UINT nextSrvIndex_ = 0;         // 追加: 次に割り当てる SRV インデックス
+
 	ComPtr<ID3D12Resource> renderTargets_[kFrameCount]; // バックバッファー
 
 	ComPtr<ID3D12PipelineState> pipelinestate_;         // パイプラインステート
@@ -110,6 +116,15 @@ private:
 		DirectX::XMMATRIX rotationMatrix;
 		DirectX::XMMATRIX translationMatrix;
 		bool visible = true; // 表示切替フラグ
+
+		float alpha = 1.0f;
+	};
+
+	struct CBData
+	{
+		DirectX::XMMATRIX transform;
+		float alpha;
+		float padding[3]; // 16バイトアラインメント
 	};
 
 	void InitializeTextureTransform(const std::wstring& key);

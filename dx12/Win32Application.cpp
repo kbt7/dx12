@@ -69,8 +69,8 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
     GameState gs = GameState::TITLE;
 
     // テクスチャ初期化やBGM読み込みはここでやる
-    dxApp->InitializeTexture(L"mura", L"Assets/Image/mura.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
-    dxApp->InitializeTexture(L"kenshi",L"Assets/Image/kenshi.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
+    dxApp->InitializeTexture(L"mura", L"Assets/Image/mura.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight(), 1.0f);
+    dxApp->InitializeTexture(L"kenshi",L"Assets/Image/kenshi.png", 0.0f, 0.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight(), 1.0f);
 
     if (!dxApp->engine_.Initialize()) {
         wprintf(L"初期化失敗\n");
@@ -84,8 +84,11 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
     dxApp->engine_.LoadSE(L"click", L"Assets/Audio/maou_se_system49.mp3");
     dxApp->engine_.SetVolumeForSE(L"click", 1.0f);
 
-    Button title(L"titleButton", 0.0f, 0.0f, 300, 300, [&gs]() { gs = GameState::PLAY; });
-
+    std::wstring titleButton = L"titleButton";
+    dxApp->buttons[titleButton] = Button(titleButton, L"Assets/Image/sample.png", dxApp->GetWindowWidth()/2-150.0f, dxApp->GetWindowHeight()/2+100.0f, 300.0f, 100.0f, [&gs]() { gs = GameState::PLAY; });
+    dxApp->InitializeTexture(dxApp->buttons[titleButton].getKey(), dxApp->buttons[titleButton].getImagePass(), 
+        dxApp->buttons[titleButton].getX(), dxApp->buttons[titleButton].getY(), 
+        dxApp->buttons[titleButton].getWidth(), dxApp->buttons[titleButton].getHeight(), 0.5f);
     ShowWindow(hwnd, SW_SHOW);
 
     MSG msg = {};
@@ -113,6 +116,9 @@ LRESULT CALLBACK Win32Application::WindowProc(HWND hwnd, UINT message, WPARAM wp
         DXApplication* dxApp = GetDxAppPtr(hwnd);
         if (dxApp) {
             dxApp->engine_.PlaySE(L"click");
+            for (auto &bt : dxApp->buttons) {
+                bt.second.Chack(hwnd);
+            }
         }
         return 0;
     }

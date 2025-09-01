@@ -172,18 +172,23 @@ void DXApplication::LoadPipeline(HWND hwnd)
 
 	// ディスクリプタヒープの初期化
 	{
-		// レンダーターゲットビュー
+		// レンダーターゲットビュー (既存)
 		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
 		rtvHeapDesc.NumDescriptors = kFrameCount;
 		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 		rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 		ThrowIfFailed(device_->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(rtvHeaps_.ReleaseAndGetAddressOf())));
-		// 基本情報の受け渡し用
+
+		// SRV/CBV/UAV 用ヒープ（十分な数を確保）
 		D3D12_DESCRIPTOR_HEAP_DESC basicHeapDesc = {};
-		basicHeapDesc.NumDescriptors = 2; // SRV + SBV
+		basicHeapDesc.NumDescriptors = 128; // ← 余裕を持たせる（必要なら増やして）
 		basicHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		basicHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		ThrowIfFailed(device_->CreateDescriptorHeap(&basicHeapDesc, IID_PPV_ARGS(basicHeap_.ReleaseAndGetAddressOf())));
+
+		// ディスクリプタ増分サイズを保存
+		descriptorSizeCBVSRV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		nextSrvIndex_ = 0; // 初期化
 	}
 
 	// スワップチェーンと関連付けてレンダーターゲットビューを生成
@@ -329,25 +334,25 @@ void DXApplication::ThrowIfFailed(HRESULT hr)
 void DXApplication::InitializeTexture(
 	const std::wstring& key,
 	const std::wstring& filepath,
-	float x, float y, float width, float height)
+	float x, float y, float width, float height,
+	float alpha = 1.0f)
 {
 	using namespace DirectX;
 
-	// 既に同じキーが存在する場合は上書きせず終了
 	if (textures_.find(key) != textures_.end()) {
 		return;
 	}
 
-	// 読み込み関連
+	// --- テクスチャ読み込み ---
 	TexMetadata metadata = {};
 	ScratchImage scratchImg = {};
 	TextureResource resource = {};
 	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
 
-	ThrowIfFailed(LoadFromWICFile(filepath.c_str(), WIC_FLAGS_FORCE_RGB, &metadata, scratchImg));
+	ThrowIfFailed(LoadFromWICFile(filepath.c_str(), WIC_FLAGS_FORCE_RGB | WIC_FLAGS_IGNORE_SRGB, &metadata, scratchImg));
 	ThrowIfFailed(PrepareUpload(device_.Get(), scratchImg.GetImages(), scratchImg.GetImageCount(), metadata, subresources));
 
-	// GPUテクスチャリソース作成
+	// --- GPU テクスチャ作成 ---
 	ComPtr<ID3D12Resource> texture;
 	auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	auto textureDesc = CD3DX12_RESOURCE_DESC::Tex2D(
@@ -364,12 +369,11 @@ void DXApplication::InitializeTexture(
 		IID_PPV_ARGS(texture.ReleaseAndGetAddressOf())
 	));
 
-	// アップロードバッファ
+	// --- アップロードバッファ ---
 	ComPtr<ID3D12Resource> uploadBuffer;
 	UINT64 uploadBufferSize = GetRequiredIntermediateSize(texture.Get(), 0, 1);
 	auto uploadHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
-
 	ThrowIfFailed(device_->CreateCommittedResource(
 		&uploadHeapProps,
 		D3D12_HEAP_FLAG_NONE,
@@ -379,9 +383,9 @@ void DXApplication::InitializeTexture(
 		IID_PPV_ARGS(uploadBuffer.ReleaseAndGetAddressOf())
 	));
 
-	// 定数バッファ
+	// --- 定数バッファ --- 
 	auto cbHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(XMMATRIX));
+	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(CBData)); // ★修正: XMMATRIX ではなく CBData
 	ThrowIfFailed(device_->CreateCommittedResource(
 		&cbHeapProps,
 		D3D12_HEAP_FLAG_NONE,
@@ -391,7 +395,7 @@ void DXApplication::InitializeTexture(
 		IID_PPV_ARGS(resource.constantBuffer.ReleaseAndGetAddressOf())
 	));
 
-	// 転送処理
+	// --- 転送処理 ---
 	ThrowIfFailed(commandAllocator_->Reset());
 	ThrowIfFailed(commandList_->Reset(commandAllocator_.Get(), pipelinestate_.Get()));
 	UpdateSubresources(commandList_.Get(), texture.Get(), uploadBuffer.Get(), 0, 0, subresources.size(), subresources.data());
@@ -404,22 +408,24 @@ void DXApplication::InitializeTexture(
 	commandQueue_->ExecuteCommandLists(_countof(lists), lists);
 	WaitForGpu();
 
-	// SRV作成
+	// --- SRV 作成 ---
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MipLevels = 1u;
 
-	size_t index = textures_.size(); // 既存登録数で割り当て位置決定
-	auto handle = basicHeap_->GetCPUDescriptorHandleForHeapStart();
-	handle.ptr += index * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	device_->CreateShaderResourceView(texture.Get(), &srvDesc, handle);
+	const UINT index = nextSrvIndex_;
+	if (index >= basicHeap_->GetDesc().NumDescriptors) ThrowIfFailed(E_FAIL);
 
-	resource.srvHandle = basicHeap_->GetGPUDescriptorHandleForHeapStart();
-	resource.srvHandle.ptr += index * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(basicHeap_->GetCPUDescriptorHandleForHeapStart(), static_cast<INT>(index), descriptorSizeCBVSRV_);
+	device_->CreateShaderResourceView(texture.Get(), &srvDesc, cpuHandle);
 
-	// 頂点データ
+	CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(basicHeap_->GetGPUDescriptorHandleForHeapStart(), static_cast<INT>(index), descriptorSizeCBVSRV_);
+	resource.srvHandle = gpuHandle;
+	nextSrvIndex_++;
+
+	// --- 頂点データ ---
 	float left = x;
 	float right = x + width;
 	float top = y;
@@ -431,7 +437,7 @@ void DXApplication::InitializeTexture(
 		{{ right, top,    0.0f }, { 1.0f, 0.0f }},
 	};
 
-	// 頂点バッファ
+	// --- 頂点バッファ作成 ---
 	UINT vbSize = sizeof(vertices);
 	auto vbHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto vbDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
@@ -443,16 +449,18 @@ void DXApplication::InitializeTexture(
 		nullptr,
 		IID_PPV_ARGS(resource.vertexBuffer.ReleaseAndGetAddressOf())
 	));
+
+	// ★修正: 頂点データを GPU にコピー
 	void* mapped = nullptr;
 	resource.vertexBuffer->Map(0, nullptr, &mapped);
-	memcpy(mapped, vertices, vbSize);
+	memcpy(mapped, vertices, sizeof(vertices));
 	resource.vertexBuffer->Unmap(0, nullptr);
 
 	resource.vertexView.BufferLocation = resource.vertexBuffer->GetGPUVirtualAddress();
 	resource.vertexView.StrideInBytes = sizeof(Vertex);
 	resource.vertexView.SizeInBytes = vbSize;
 
-	// インデックスバッファ
+	// --- インデックスバッファ ---
 	uint16_t indices[] = { 0, 1, 2, 2, 1, 3 };
 	UINT ibSize = sizeof(indices);
 	auto ibHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -465,6 +473,8 @@ void DXApplication::InitializeTexture(
 		nullptr,
 		IID_PPV_ARGS(resource.indexBuffer.ReleaseAndGetAddressOf())
 	));
+
+	// ★修正: インデックスもコピー
 	resource.indexBuffer->Map(0, nullptr, &mapped);
 	memcpy(mapped, indices, ibSize);
 	resource.indexBuffer->Unmap(0, nullptr);
@@ -473,7 +483,7 @@ void DXApplication::InitializeTexture(
 	resource.indexView.SizeInBytes = ibSize;
 	resource.indexView.Format = DXGI_FORMAT_R16_UINT;
 
-	// 初期トランスフォーム
+	// --- トランスフォーム初期化 ---
 	XMMATRIX matrix = XMMatrixIdentity();
 	matrix.r[0].m128_f32[0] = 2.0f / windowWidth_;
 	matrix.r[1].m128_f32[1] = -2.0f / windowHeight_;
@@ -481,25 +491,31 @@ void DXApplication::InitializeTexture(
 	matrix.r[3].m128_f32[1] = 1.0f;
 	resource.transformMatrix = matrix;
 
+	// ★修正: CBData に alpha も含めて書き込む
+	CBData cbData = {};
+	cbData.transform = resource.transformMatrix;
+	cbData.alpha = alpha;
+
 	void* cbMapped = nullptr;
 	resource.constantBuffer->Map(0, nullptr, &cbMapped);
-	memcpy(cbMapped, &resource.transformMatrix, sizeof(XMMATRIX));
+	memcpy(cbMapped, &cbData, sizeof(CBData));
 	resource.constantBuffer->Unmap(0, nullptr);
 
-	// 情報格納
+	// --- 情報格納 ---
 	resource.x = x;
 	resource.y = y;
 	resource.width = width;
 	resource.height = height;
 	resource.texture = texture;
 	resource.visible = true;
+	resource.alpha = alpha;
 
-	// マップに登録
 	textures_[key] = std::move(resource);
 
-	// トランスフォーム初期化
+	// トランスフォーム初期化（任意）
 	InitializeTextureTransform(key);
 }
+
 
 void DXApplication::WaitForGpu()
 {

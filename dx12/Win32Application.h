@@ -2,6 +2,7 @@
 
 #include "DXApplication.h" // ★インクルードを追加
 #include "Button.h"
+#include <vector>
 
 class Win32Application
 {
