@@ -17,11 +17,11 @@ public:
 	float getY();
 	float getWidth();
 	float getHeight();
+	bool AreaChack(HWND hwnd);
 private:
 	std::wstring key;
 	std::wstring imagePass;
 	float x, y, width, height;
 	bool visible = false;
 	std::function<void()> click;
-	bool AreaChack(HWND hwnd);
 };

@@ -13,16 +13,6 @@ Button::Button(const std::wstring& key, const std::wstring& imagePass, float x, 
 	: key(key), imagePass(imagePass), x(x), y(y), width(width), height(height), click(fn) {
 }
 
-void Button::OnCursol(HWND hwnd) {
-	DXApplication* dxApp = reinterpret_cast<DXApplication*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-	if (AreaChack(hwnd)) {
-		dxApp->SetTextureBrightnessAndAlpha(key, 1.5f, 0.8f);
-	}
-	else {
-		dxApp->SetTextureBrightnessAndAlpha(key, 1.0f, 0.5f);
-	}
-}
-
 void Button::Chack(HWND hwnd) {
 
 	if (AreaChack(hwnd)) {

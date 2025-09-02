@@ -102,15 +102,22 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
 
         dxApp->OnUpdate();
 
-        // --- 並列でボタンのカーソル更新 ---
-        std::for_each(
-            std::execution::par, // 並列実行
-            dxApp->buttons.begin(),
-            dxApp->buttons.end(),
+        // 並列でカーソル判定
+        std::for_each(std::execution::par, dxApp->buttons.begin(), dxApp->buttons.end(),
             [hwnd](auto& btPair) {
-                btPair.second.OnCursol(hwnd);
+                btPair.second.AreaChack(hwnd); // 判定だけ
             }
         );
+
+        // ここでメインスレッドで明るさ・アルファ更新
+        for (auto& btPair : dxApp->buttons) {
+            if (btPair.second.AreaChack(hwnd)) { // 仮: 先ほどの判定結果を使用
+                dxApp->SetTextureBrightnessAndAlpha(btPair.second.getKey(), 1.5f, 0.8f);
+            }
+            else {
+                dxApp->SetTextureBrightnessAndAlpha(btPair.second.getKey(), 1.0f, 0.5f);
+            }
+        }
 
         dxApp->OnRender();
     }
