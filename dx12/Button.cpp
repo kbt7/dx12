@@ -6,11 +6,26 @@ bool Button::AreaChack(HWND hwnd) {
 	GetCursorPos(&pt);
 	ScreenToClient(hwnd, &pt);
 
-	return (x < pt.x && pt.x < x + width) && (y < pt.y && pt.y < y + height);
+	RECT clientRect;
+	GetClientRect(hwnd, &clientRect);
+
+	// 現在のウィンドウサイズに合わせて絶対座標に変換
+	float x_abs = x_ratio * clientRect.right;
+	float y_abs = y_ratio * clientRect.bottom;
+	float w_abs = width_ratio * clientRect.right;
+	float h_abs = height_ratio * clientRect.bottom;
+
+	return (pt.x >= x_abs && pt.x <= x_abs + w_abs) &&
+		(pt.y >= y_abs && pt.y <= y_abs + h_abs);
 }
 
-Button::Button(const std::wstring& key, const std::wstring& imagePass, float x, float y, float width, float height, std::function<void()> fn)
-	: key(key), imagePass(imagePass), x(x), y(y), width(width), height(height), click(fn) {
+Button::Button(const std::wstring& key, const std::wstring& imagePath, float x, float y, float width, float height, float windowWidth, float windowHeight, std::function<void()> fn)
+	: key(key), imagePath(imagePath), click(fn) {
+	// 正規化座標に変換
+	x_ratio = x / windowWidth;
+	y_ratio = y / windowHeight;
+	width_ratio = width / windowWidth;
+	height_ratio = height / windowHeight;
 }
 
 void Button::Chack(HWND hwnd) {
@@ -25,28 +40,4 @@ void Button::Chack(HWND hwnd) {
 		);
 		
 	}
-}
-
-std::wstring Button::getKey() {
-	return key;
-}
-
-std::wstring Button::getImagePass() {
-	return imagePass;
-}
-
-float Button::getX() {
-	return x;
-}
-
-float Button::getY() {
-	return y;
-}
-
-float Button::getWidth() {
-	return width;
-}
-
-float Button::getHeight() {
-	return height;
 }

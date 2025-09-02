@@ -85,10 +85,16 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
     dxApp->engine_.SetVolumeForSE(L"click", 1.0f);
 
     std::wstring titleButton = L"titleButton";
-    dxApp->buttons[titleButton] = Button(titleButton, L"Assets/Image/sample.png", dxApp->GetWindowWidth()/2-150.0f, dxApp->GetWindowHeight()/2+100.0f, 300.0f, 100.0f, [&gs]() { gs = GameState::PLAY; });
-    dxApp->InitializeTexture(dxApp->buttons[titleButton].getKey(), dxApp->buttons[titleButton].getImagePass(), 
-        dxApp->buttons[titleButton].getX(), dxApp->buttons[titleButton].getY(), 
-        dxApp->buttons[titleButton].getWidth(), dxApp->buttons[titleButton].getHeight(), 0.5f);
+    dxApp->buttons[titleButton] = Button(titleButton, L"Assets/Image/titleButton.png", dxApp->GetWindowWidth()/2-150.0f, dxApp->GetWindowHeight()/2+100.0f, 300.0f, 100.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight(), [&gs]() { gs = GameState::PLAY; });
+    dxApp->InitializeTexture(
+        dxApp->buttons[titleButton].getKey(),
+        dxApp->buttons[titleButton].getImagePath(),
+        dxApp->buttons[titleButton].getXAbs(dxApp->GetWindowWidth()),   // x_ratio ¨ â‘Î’l
+        dxApp->buttons[titleButton].getYAbs(dxApp->GetWindowHeight()),   // y_ratio ¨ â‘Î’l
+        dxApp->buttons[titleButton].getWidthAbs(dxApp->GetWindowWidth()),
+        dxApp->buttons[titleButton].getHeightAbs(dxApp->GetWindowHeight()),
+        0.5f  // alpha
+    );
     ShowWindow(hwnd, SW_SHOW);
 
     MSG msg = {};
