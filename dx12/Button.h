@@ -10,6 +10,7 @@ public:
 	Button() {};
 	Button(const std::wstring& key, const std::wstring& imagePass, float x, float y, float width, float height, std::function<void()> fn);
 	void Chack(HWND hwnd);
+	void OnCursol(HWND hwnd);
 	std::wstring getKey();
 	std::wstring getImagePass();
 	float getX();
@@ -22,4 +23,5 @@ private:
 	float x, y, width, height;
 	bool visible = false;
 	std::function<void()> click;
+	bool AreaChack(HWND hwnd);
 };

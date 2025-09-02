@@ -101,6 +101,17 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
         }
 
         dxApp->OnUpdate();
+
+        // --- 並列でボタンのカーソル更新 ---
+        std::for_each(
+            std::execution::par, // 並列実行
+            dxApp->buttons.begin(),
+            dxApp->buttons.end(),
+            [hwnd](auto& btPair) {
+                btPair.second.OnCursol(hwnd);
+            }
+        );
+
         dxApp->OnRender();
     }
 

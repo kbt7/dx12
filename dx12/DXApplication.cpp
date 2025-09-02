@@ -385,7 +385,7 @@ void DXApplication::InitializeTexture(
 
 	// --- 定数バッファ --- 
 	auto cbHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(CBData)); // ★修正: XMMATRIX ではなく CBData
+	auto cbDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(ConstBufferData)); // ★修正: XMMATRIX ではなく CBData
 	ThrowIfFailed(device_->CreateCommittedResource(
 		&cbHeapProps,
 		D3D12_HEAP_FLAG_NONE,
@@ -492,13 +492,14 @@ void DXApplication::InitializeTexture(
 	resource.transformMatrix = matrix;
 
 	// ★修正: CBData に alpha も含めて書き込む
-	CBData cbData = {};
-	cbData.transform = resource.transformMatrix;
-	cbData.alpha = alpha;
+	ConstBufferData cbData = {};
+	DirectX::XMStoreFloat4x4(&cbData.gTransform, resource.transformMatrix);
+	cbData.gAlpha = alpha;
+	cbData.gBrightness = resource.brightness;
 
 	void* cbMapped = nullptr;
 	resource.constantBuffer->Map(0, nullptr, &cbMapped);
-	memcpy(cbMapped, &cbData, sizeof(CBData));
+	memcpy(cbMapped, &cbData, sizeof(ConstBufferData));
 	resource.constantBuffer->Unmap(0, nullptr);
 
 	// --- 情報格納 ---
@@ -655,4 +656,33 @@ void DXApplication::ReleaseTexture(const std::wstring& key)
 		it->second.constantBuffer.Reset();
 		textures_.erase(it);
 	}
+}
+
+void DXApplication::SetTextureBrightnessAndAlpha(const std::wstring& key, float brightness, float alpha)
+{
+	auto it = textures_.find(key);
+	if (it == textures_.end()) return;
+
+	auto& tex = it->second;
+
+	// 固定範囲で clamp
+	tex.brightness = std::clamp(brightness, 0.0f, 2.0f); // 明るさは最大2倍
+	tex.alpha = std::clamp(alpha, 0.0f, 1.0f);      // 透明度は最大1.0
+
+	// 定数バッファの brightness 部分のみ更新
+	ConstBufferData cbData = {};
+	cbData.gBrightness = tex.brightness;
+	cbData.gAlpha = tex.alpha;
+
+	void* mapped = nullptr;
+	D3D12_RANGE readRange = { 0, 0 }; // CPU は読み取らない
+	tex.constantBuffer->Map(0, &readRange, &mapped);
+
+	// brightness と alpha のオフセット位置に書き込む
+	// gTransform が 64 バイト (4x4 float) の場合、offset はその後
+	char* pData = reinterpret_cast<char*>(mapped);
+	std::memcpy(pData + sizeof(DirectX::XMFLOAT4X4), &cbData.gAlpha, sizeof(float));
+	std::memcpy(pData + sizeof(DirectX::XMFLOAT4X4) + sizeof(float), &cbData.gBrightness, sizeof(float));
+
+	tex.constantBuffer->Unmap(0, nullptr);
 }

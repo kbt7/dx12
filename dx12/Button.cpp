@@ -1,14 +1,31 @@
 #include "Button.h"
+#include "DXApplication.h"
+
+bool Button::AreaChack(HWND hwnd) {
+	POINT pt;
+	GetCursorPos(&pt);
+	ScreenToClient(hwnd, &pt);
+
+	return (x < pt.x && pt.x < x + width) && (y < pt.y && pt.y < y + height);
+}
 
 Button::Button(const std::wstring& key, const std::wstring& imagePass, float x, float y, float width, float height, std::function<void()> fn)
 	: key(key), imagePass(imagePass), x(x), y(y), width(width), height(height), click(fn) {
 }
 
+void Button::OnCursol(HWND hwnd) {
+	DXApplication* dxApp = reinterpret_cast<DXApplication*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+	if (AreaChack(hwnd)) {
+		dxApp->SetTextureBrightnessAndAlpha(key, 1.5f, 0.8f);
+	}
+	else {
+		dxApp->SetTextureBrightnessAndAlpha(key, 1.0f, 0.5f);
+	}
+}
+
 void Button::Chack(HWND hwnd) {
-	POINT pt;
-	GetCursorPos(&pt);
-	ScreenToClient(hwnd, &pt);
-	if ((x < pt.x && pt.x < x + width) && (y < pt.y && pt.y < y + height)) {
+
+	if (AreaChack(hwnd)) {
 		click();
 		MessageBoxW(
 			nullptr,             // 親ウィンドウのハンドル（不要なら nullptr）
@@ -16,6 +33,7 @@ void Button::Chack(HWND hwnd) {
 			L"debug",       // タイトル（const wchar_t*）
 			MB_OK | MB_ICONINFORMATION // ボタンやアイコンの種類
 		);
+		
 	}
 }
 

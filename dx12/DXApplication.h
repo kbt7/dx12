@@ -16,6 +16,7 @@
 #include "d3dx12.h"
 #include <stdexcept>
 #include <vector>
+#include <algorithm>
 #include <map>
 #include "AudioEngine.h"
 #include "Button.h"
@@ -48,6 +49,7 @@ public:
 
 	AudioEngine engine_;
 	std::map<std::wstring, Button> buttons;
+	void SetTextureBrightnessAndAlpha(const std::wstring& key, float brightness, float alpha);
 private:
 	static const unsigned int kFrameCount = 2;
 
@@ -118,13 +120,16 @@ private:
 		bool visible = true; // 表示切替フラグ
 
 		float alpha = 1.0f;
+		float brightness = 1.0f; // ★追加：明るさ係数（1.0で通常）
 	};
 
-	struct CBData
+	struct ConstBufferData
 	{
-		DirectX::XMMATRIX transform;
-		float alpha;
-		float padding[3]; // 16バイトアラインメント
+		DirectX::XMFLOAT4X4 gTransform;
+		float gAlpha;
+		float gBrightness; // ★追加
+		float padding[2];  // 16バイトアラインメント調整
+		float pad2[36];
 	};
 
 	void InitializeTextureTransform(const std::wstring& key);

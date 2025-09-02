@@ -3,6 +3,8 @@
 #include "DXApplication.h" // ★インクルードを追加
 #include "Button.h"
 #include <vector>
+#include <execution> // 並列アルゴリズム
+#include <algorithm> // std::for_each
 
 class Win32Application
 {
