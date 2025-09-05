@@ -50,6 +50,14 @@ public:
 	AudioEngine engine_;
 	std::map<std::wstring, Button> buttons;
 	void SetTextureBrightnessAndAlpha(const std::wstring& key, float brightness, float alpha);
+	void DrawTexture(
+		const std::wstring& key,
+		float x, float y,
+		float width, float height,
+		float alpha,
+		float brightness,
+		float rotation,
+		bool visible);
 private:
 	static const unsigned int kFrameCount = 2;
 

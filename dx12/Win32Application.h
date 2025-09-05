@@ -2,9 +2,11 @@
 
 #include "DXApplication.h" // ★インクルードを追加
 #include "Button.h"
+#include "PetalSystem.h"
 #include <vector>
 #include <execution> // 並列アルゴリズム
 #include <algorithm> // std::for_each
+#include <chrono>
 
 class Win32Application
 {
@@ -13,4 +15,7 @@ public:
 
 private:
 	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
+	static HWND AddSelectableText(HWND hwndParent, HINSTANCE hInstance,
+		int x, int y, int w, int h,
+		const std::wstring& text);
 };

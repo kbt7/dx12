@@ -31,13 +31,6 @@ Button::Button(const std::wstring& key, const std::wstring& imagePath, float x, 
 void Button::Chack(HWND hwnd) {
 
 	if (AreaChack(hwnd)) {
-		click();
-		MessageBoxW(
-			nullptr,             // 親ウィンドウのハンドル（不要なら nullptr）
-			key.c_str(),        // メッセージ本文（const wchar_t*）
-			L"debug",       // タイトル（const wchar_t*）
-			MB_OK | MB_ICONINFORMATION // ボタンやアイコンの種類
-		);
-		
+		click();		
 	}
 }

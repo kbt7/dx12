@@ -39,7 +39,7 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
     HWND hwnd = CreateWindow(
         windowClass.lpszClassName,
         dxApp->GetTitle(),
-        WS_OVERLAPPEDWINDOW,
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         windowRect.right - windowRect.left,
@@ -95,10 +95,16 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
         dxApp->buttons[titleButton].getHeightAbs(dxApp->GetWindowHeight()),
         0.5f  // alpha
     );
+
+    PetalSystem petalSystem(dxApp, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
+    std::vector<std::wstring> petalImages = { L"Assets/Image/petal.png" };
+    petalSystem.Initialize(petalImages, 100); // 花びら50枚
+
     ShowWindow(hwnd, SW_SHOW);
 
     MSG msg = {};
     float angle = 0.0f;
+    auto previousTime = std::chrono::high_resolution_clock::now();
 
     while (msg.message != WM_QUIT) {
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -106,7 +112,29 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
             DispatchMessage(&msg);
         }
 
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<float> elapsed = currentTime - previousTime;
+        float deltaTime = elapsed.count(); // 秒単位
+        previousTime = currentTime;
+
         dxApp->OnUpdate();
+
+        if (gs == GameState::TITLE) {
+            petalSystem.Update(deltaTime);
+            petalSystem.Render();
+        }
+        else if (gs == GameState::PLAY) {
+            if (!petalSystem.IsFadingOut()) {
+                petalSystem.StartFadeOut(2.0f); // 2秒でフェードアウト
+            }
+            petalSystem.Update(deltaTime);
+            petalSystem.Render();
+
+            // フェードアウトが完了したら花びらをクリア
+            if (petalSystem.IsFinished()) {
+                petalSystem.Clear();
+            }
+        }
 
         // 並列でカーソル判定
         std::for_each(std::execution::par, dxApp->buttons.begin(), dxApp->buttons.end(),
@@ -152,4 +180,24 @@ LRESULT CALLBACK Win32Application::WindowProc(HWND hwnd, UINT message, WPARAM wp
     default:
         return DefWindowProc(hwnd, message, wparam, lparam);
     }
+}
+
+HWND Win32Application::AddSelectableText(HWND hwndParent, HINSTANCE hInstance,
+    int x, int y, int w, int h,
+    const std::wstring& text)
+{
+    HWND hEdit = CreateWindowExW(
+        0, L"EDIT", text.c_str(),
+        WS_CHILD | WS_VISIBLE | WS_BORDER |
+        ES_READONLY | ES_MULTILINE | ES_AUTOVSCROLL,
+        x, y, w, h,
+        hwndParent,
+        nullptr,
+        hInstance,
+        nullptr
+    );
+
+    // デフォルトフォントを設定
+    SendMessageW(hEdit, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+    return hEdit;
 }

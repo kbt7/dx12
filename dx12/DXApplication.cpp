@@ -686,3 +686,31 @@ void DXApplication::SetTextureBrightnessAndAlpha(const std::wstring& key, float 
 
 	tex.constantBuffer->Unmap(0, nullptr);
 }
+
+void DXApplication::DrawTexture(
+	const std::wstring& key,
+	float x, float y,
+	float width, float height,
+	float alpha,
+	float brightness,
+	float rotation,
+	bool visible)
+{
+	// 可視状態を設定
+	SetTextureVisible(key, visible);
+	if (!visible) return;
+
+	// 位置とサイズを更新
+	SetTexturePosition(key, x, y, width, height);
+
+	// 回転を更新
+	if (rotation != 0.0f) {
+		SetTextureRotation(key, rotation);
+	}
+	else {
+		InitializeTextureTransform(key); // 回転しない場合でも transform を更新
+	}
+
+	// 明るさとアルファを更新
+	SetTextureBrightnessAndAlpha(key, brightness, alpha);
+}
