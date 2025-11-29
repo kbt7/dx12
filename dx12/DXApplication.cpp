@@ -1,4 +1,6 @@
 #include "DXApplication.h"
+#include "Item.h"    // Item クラスの定義
+#include "Enemy.h"   // Enemy クラスの定義
 
 DXApplication::DXApplication(unsigned int width, unsigned int height, std::wstring title)
 	: title_(title)
@@ -713,4 +715,336 @@ void DXApplication::DrawTexture(
 
 	// 明るさとアルファを更新
 	SetTextureBrightnessAndAlpha(key, brightness, alpha);
+}
+
+void DXApplication::LoadEnemyData(const std::wstring& filepath)
+{
+	std::wifstream file(filepath);
+
+	if (!file.is_open()) {
+		OutputDebugString(L"ERROR: Enemy data file not found!\n");
+		return;
+	}
+
+	std::wstring line;
+	while (std::getline(file, line)) {
+		if (line.empty() || line[0] == L'#') continue;
+
+		std::wstringstream ss(line);
+		std::wstring segment;
+		std::vector<std::wstring> tokens;
+
+		while (std::getline(ss, segment, L',')) {
+			tokens.push_back(segment);
+		}
+
+		if (tokens.size() < 7) {
+			OutputDebugString(L"WARNING: Enemy data line skipped due to missing columns.\n");
+			continue;
+		}
+
+		try {
+			// ★ Enemy クラスのインスタンスを作成
+			Enemy enemy;
+			enemy.id = tokens[0];
+			enemy.name = tokens[1];
+			enemy.imagePath = tokens[2];
+			enemy.maxHp = std::stoi(tokens[3]);
+			enemy.attack = std::stoi(tokens[4]);
+			enemy.baseExp = std::stoi(tokens[5]);
+
+			// ドロップリストのパース (tokens[6])
+			std::wstring dropListStr = tokens[6];
+			std::wstringstream dropListSS(dropListStr);
+			std::wstring dropEntry;
+
+			while (std::getline(dropListSS, dropEntry, L'|')) {
+				std::wstringstream dropEntrySS(dropEntry);
+				std::wstring itemToken;
+				std::vector<std::wstring> itemTokens;
+
+				while (std::getline(dropEntrySS, itemToken, L':')) {
+					itemTokens.push_back(itemToken);
+				}
+
+				if (itemTokens.size() == 2) {
+					// ★ DropInfo 構造体（またはクラス）のインスタンスを作成
+					DropInfo info;
+					info.itemId = itemTokens[0];
+					info.dropRate = std::stof(itemTokens[1]);
+					enemy.drops.push_back(info); // Enemy オブジェクトの vector に追加
+				}
+				else {
+					OutputDebugString(L"WARNING: Invalid drop format in EnemyData.\n");
+				}
+			}
+
+			allEnemies_[enemy.id] = enemy; // マップに Enemy オブジェクトを格納
+
+		}
+		catch (const std::exception& e) {
+			std::wstring errorMsg = L"ERROR: Failed to parse enemy data for ID: " + tokens[0] + L"\n";
+			OutputDebugString(errorMsg.c_str());
+		}
+	}
+}
+
+EquipSlot StringToEquipSlot(const std::wstring& s) {
+	if (s == L"Head") return EquipSlot::Head;
+	if (s == L"Body") return EquipSlot::Body;
+	if (s == L"Neck") return EquipSlot::Neck;
+	if (s == L"Hand_Weapon") return EquipSlot::Hand_Weapon;
+	if (s == L"Hand_Shield") return EquipSlot::Hand_Shield;
+	if (s == L"Back") return EquipSlot::Back;
+	if (s == L"Waist") return EquipSlot::Waist;
+	if (s == L"Arm") return EquipSlot::Arm;
+	if (s == L"Leg") return EquipSlot::Leg;
+
+	// ★指を統一
+	if (s == L"Finger") return EquipSlot::Finger;
+
+	return EquipSlot::NONE;
+}
+
+EnchantType StringToEnchantType(const std::wstring& s) {
+	if (s == L"SKILL_LV_UP") return EnchantType::SKILL_LV_UP;
+	if (s == L"FIRE_RESISTANCE") return EnchantType::FIRE_RESISTANCE;
+	if (s == L"POISON_RESISTANCE") return EnchantType::POISON_RESISTANCE;
+	if (s == L"ATK_PER_LEVEL") return EnchantType::ATK_PER_LEVEL;
+	// ... すべての EnchantType に対応する分岐を追加
+	return EnchantType::NONE;
+}
+
+void DXApplication::LoadItemData(const std::wstring& filepath)
+{
+	std::wifstream file(filepath);
+	if (!file.is_open()) {
+		OutputDebugString(L"ERROR: Item data file not found!\n");
+		return;
+	}
+
+	std::wstring line;
+	while (std::getline(file, line)) {
+		if (line.empty() || line[0] == L'#') continue;
+
+		std::wstringstream ss(line);
+		std::wstring segment;
+		std::vector<std::wstring> tokens;
+
+		while (std::getline(ss, segment, L',')) {
+			tokens.push_back(segment);
+		}
+
+		// 基本情報 (ID, Name, Type, Description, Price) は最低5列
+		if (tokens.size() < 5) {
+			OutputDebugString(L"WARNING: Item data line skipped due to missing essential columns (ID-Price).\n");
+			continue;
+		}
+
+		try {
+			Item item;
+			item.id = tokens[0];
+			item.name = tokens[1];
+			item.description = tokens[3];
+			item.price = std::stoi(tokens[4]);
+
+			// 1. ItemType の決定と設定 (tokens[2])
+			// Material と Consumable は EquipSlot::NONE を共有するため、最初のブロックで処理
+			if (tokens[2] == L"Material" || tokens[2] == L"Consumable") {
+				item.type = (tokens[2] == L"Material") ? ItemType::Material : ItemType::Consumable;
+				item.equipSlot = EquipSlot::NONE;
+
+				if (item.type == ItemType::Consumable) {
+					// 消耗品は基本5列 + 消耗品2列 (計7列) が必要
+					if (tokens.size() < 7) {
+						OutputDebugString(L"WARNING: Consumable item skipped (missing effect columns).\n");
+						continue; // 必要な列がない場合はスキップ
+					}
+					// 効果情報 (tokens[5], tokens[6])
+					item.targetType = tokens[5];
+					item.effectValue = std::stoi(tokens[6]);
+				}
+			}
+			else if (tokens[2] == L"Weapon" || tokens[2] == L"Armor") {
+				// 装備品は全ての列 (11列: 基本5 + スロット1 + 装備4 + エンチャント1) が必要
+				if (tokens.size() < 11) {
+					OutputDebugString(L"WARNING: Equipment item skipped (missing required columns).\n");
+					continue;
+				}
+
+				item.type = (tokens[2] == L"Weapon") ? ItemType::Weapon : ItemType::Armor;
+
+				// スロット、素材、ボーナスステータス
+				item.equipSlot = StringToEquipSlot(tokens[5]);
+				item.matNeededId = tokens[6];
+				item.requiredMats = std::stoi(tokens[7]);
+				item.attackBonus = std::stoi(tokens[8]);
+				item.hpBonus = std::stoi(tokens[9]);
+
+				// エンチャントリストのパース (tokens[10])
+				std::wstring enchantListStr = tokens[10];
+				std::wstringstream enchantListSS(enchantListStr);
+				std::wstring enchantEntry;
+
+				// パイプ '|' で個々のエンチャントのエントリを分割
+				while (std::getline(enchantListSS, enchantEntry, L'|')) {
+					std::wstringstream enchantEntrySS(enchantEntry);
+					std::wstring enchantToken;
+					std::vector<std::wstring> enchantTokens;
+
+					// コロン ':' で Type, Value, TargetID を分割
+					while (std::getline(enchantEntrySS, enchantToken, L':')) {
+						enchantTokens.push_back(enchantToken);
+					}
+
+					if (enchantTokens.size() == 3) {
+						Enchantment ench = {};
+						ench.type = StringToEnchantType(enchantTokens[0]);
+						ench.value = std::stoi(enchantTokens[1]);
+						ench.targetId = enchantTokens[2]; // スキルIDなどを格納
+						item.enchantments.push_back(ench);
+					}
+					else {
+						OutputDebugString(L"WARNING: Invalid enchantment format.\n");
+					}
+				}
+			}
+			else {
+				OutputDebugString(L"WARNING: Unknown item type found.\n");
+				continue;
+			}
+
+			allItems_[item.id] = item;
+
+		}
+		catch (const std::exception& e) {
+			std::wstring errorMsg = L"ERROR: Failed to parse item data for ID: " + tokens[0] + L"\n";
+			OutputDebugString(errorMsg.c_str());
+		}
+	}
+}
+
+std::wstring CleanValue(const std::wstring& str) {
+	std::wstring cleaned = str;
+
+	// 前後の空白文字を削除 (トリミング)
+	const auto is_space = [](wchar_t c) { return c == L' ' || c == L'\t' || c == L'\r' || c == L'\n'; };
+	size_t first = cleaned.find_first_not_of(L" \t\r\n");
+	if (std::wstring::npos == first) return L"";
+	size_t last = cleaned.find_last_not_of(L" \t\r\n");
+	cleaned = cleaned.substr(first, (last - first + 1));
+
+	// 引用符 ("") があれば削除
+	if (cleaned.length() >= 2 && cleaned.front() == L'"' && cleaned.back() == L'"') {
+		cleaned = cleaned.substr(1, cleaned.length() - 2);
+	}
+	return cleaned;
+}
+
+void DXApplication::LoadUnitData(const std::wstring& filepath)
+{
+	// UTF-8やShift-JISなど、日本語を含むテキストファイルを扱うためのロケール設定は、
+	// 環境やファイルのエンコーディングに依存しますが、ここでは基本的な wifstream を使用します。
+	std::wifstream file(filepath);
+	if (!file.is_open()) {
+		OutputDebugString(L"ERROR: Unit data file not found!\n");
+		return;
+	}
+
+	std::wstring line;
+	Unit currentUnit = {};
+	bool inUnitBlock = false;
+
+	while (std::getline(file, line)) {
+		// 先頭の空白を削除
+		size_t first_char = line.find_first_not_of(L" \t");
+		if (first_char == std::wstring::npos || line[first_char] == L'#') continue; // 空行またはコメント行はスキップ
+
+		std::wstring trimmedLine = line.substr(first_char);
+
+		// ユニットブロックの開始をチェック: "unit <UnitName>" で始まる
+		if (trimmedLine.rfind(L"unit ", 0) == 0) {
+			if (inUnitBlock) {
+				// 閉じられていないユニットがあれば、前回のユニットを強制終了
+				if (!currentUnit.id.empty()) {
+					allUnits_[currentUnit.id] = currentUnit;
+				}
+			}
+			// "unit " の後に続くユニット名を取得
+			std::wstring unitName = trimmedLine.substr(5);
+			size_t open_brace = unitName.find(L'{');
+			if (open_brace != std::wstring::npos) {
+				unitName = unitName.substr(0, open_brace);
+			}
+			currentUnit = {}; // 新しいユニットを初期化
+			currentUnit.id = CleanValue(unitName);
+			inUnitBlock = true;
+			continue;
+		}
+
+		// ユニットブロックの終了をチェック: "}" で始まる
+		if (trimmedLine.rfind(L"}", 0) == 0 && inUnitBlock) {
+			if (!currentUnit.id.empty()) {
+				allUnits_[currentUnit.id] = currentUnit;
+			}
+			inUnitBlock = false;
+			continue;
+		}
+
+		// ブロック内のキー-値のペアをパース
+		if (inUnitBlock) {
+			size_t eq_pos = trimmedLine.find(L'=');
+			if (eq_pos == std::wstring::npos) continue; // '=' がない行はスキップ
+
+			std::wstring key = CleanValue(trimmedLine.substr(0, eq_pos));
+			std::wstring value = CleanValue(trimmedLine.substr(eq_pos + 1));
+
+			try {
+				if (key == L"name") currentUnit.name = value;
+				else if (key == L"image") currentUnit.imagePath = value;
+				else if (key == L"race") currentUnit.race = value;
+				else if (key == L"sex") currentUnit.sex = value;
+				else if (key == L"hp") currentUnit.hp = std::stoi(value);
+				else if (key == L"mp") currentUnit.mp = std::stoi(value);
+				else if (key == L"attack") currentUnit.attack = std::stoi(value);
+				else if (key == L"defence") currentUnit.defence = std::stoi(value);
+				else if (key == L"magic") currentUnit.magic = std::stoi(value);
+				else if (key == L"mental") currentUnit.mental = std::stoi(value);
+				else if (key == L"speed") currentUnit.speed = std::stoi(value);
+				else if (key == L"father") currentUnit.fatherId = value;
+				else if (key == L"mother") currentUnit.motherId = value;
+				else if (key == L"detail") currentUnit.detail = value;
+				else if (key == L"level") currentUnit.level = std::stoi(value);
+				else if (key == L"exp") currentUnit.exp = std::stoi(value);
+				else if (key == L"resistance") {
+					// resistance の特殊パース: "fire*3,water*3,..."
+					std::wstringstream rs(value);
+					std::wstring resEntry;
+					while (std::getline(rs, resEntry, L',')) {
+						size_t star_pos = resEntry.find(L'*');
+						if (star_pos != std::wstring::npos) {
+							Resistance r = {};
+							r.type = CleanValue(resEntry.substr(0, star_pos));
+							try {
+								r.value = std::stoi(CleanValue(resEntry.substr(star_pos + 1)));
+								currentUnit.resistances.push_back(r);
+							}
+							catch (...) {
+								OutputDebugString(L"WARNING: Failed to parse resistance value in unit data.\n");
+							}
+						}
+					}
+				}
+			}
+			catch (const std::exception& e) {
+				std::wstring errorMsg = L"ERROR: Failed to parse numeric data for key: " + key + L" in unit: " + currentUnit.id + L"\n";
+				OutputDebugString(errorMsg.c_str());
+			}
+		}
+	}
+
+	// ファイルの終端でブロックが閉じられていない場合の最終チェック
+	if (inUnitBlock && !currentUnit.id.empty()) {
+		allUnits_[currentUnit.id] = currentUnit;
+	}
 }
