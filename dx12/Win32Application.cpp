@@ -64,6 +64,15 @@ void InitScene_Play(DXApplication* dxApp, PetalSystem& petalSystem) {
 
 // --- メイン実行 ---
 void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
+
+    // ★ゲームデータファイルの読み込み
+    Game* game = Game::GetInstance();
+    // データファイルパスは仮に指定
+    // 実際のプロジェクト構造に合わせてパスを変更してください
+    game->LoadUnitData(L"Assets/Data/units.txt");
+    game->LoadEnemyData(L"Assets/Data/EnemyData.txt");
+    game->LoadItemData(L"Assets/Data/ItemData.txt");
+
     // ウィンドウクラス生成
     WNDCLASSEX windowClass = {};
     windowClass.cbSize = sizeof(WNDCLASSEX);

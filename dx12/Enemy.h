@@ -18,6 +18,3 @@ struct Enemy
     int baseExp;                // 基本経験値 (勝利時にパーティに配分)
     std::vector<DropInfo> drops;
 };
-
-// 全敵データを格納するマップ
-std::unordered_map<std::wstring, Enemy> allEnemies_;

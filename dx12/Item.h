@@ -66,6 +66,3 @@ struct Item
     int effectValue = 0;        // 回復量、バフの数値など (消耗品の場合)
     std::wstring targetType;    // 効果の対象 (HP_RECOVERY, MP_RECOVERY, BUFF_ATK, etc.)
 };
-
-// 全アイテムデータを格納するマップ
-std::unordered_map<std::wstring, Item> allItems_;

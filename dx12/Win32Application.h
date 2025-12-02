@@ -3,6 +3,7 @@
 #include "DXApplication.h" // ★インクルードを追加
 #include "Button.h"
 #include "PetalSystem.h"
+#include "Game.h"
 #include <vector>
 #include <execution> // 並列アルゴリズム
 #include <algorithm> // std::for_each

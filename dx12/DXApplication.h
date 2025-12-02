@@ -25,7 +25,6 @@
 #include <map>
 #include "AudioEngine.h"
 #include "Button.h"
-#include "Unit.h"
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib,"d3dcompiler.lib")
@@ -149,10 +148,4 @@ private:
 	void InitializeTextureTransform(const std::wstring& key);
 
 	std::unordered_map<std::wstring, TextureResource> textures_;
-
-	void LoadEnemyData(const std::wstring& filepath);
-	void LoadItemData(const std::wstring& filepath);
-
-	std::unordered_map<std::wstring, Unit> allUnits_;
-	void LoadUnitData(const std::wstring& filepath);
 };
