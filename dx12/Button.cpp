@@ -1,5 +1,6 @@
 #include "Button.h"
 #include "DXApplication.h"
+#include "Win32Application.h" // GetDxAppPtrのために必要かもしれません（仮）
 
 bool Button::AreaCheck(HWND hwnd) {
     // マウス位置を取得してクライアント座標に変換
@@ -20,22 +21,14 @@ bool Button::AreaCheck(HWND hwnd) {
         (pt.y >= y_abs && pt.y <= y_abs + h_abs);
 }
 
-Button::Button(const std::wstring& key, const std::wstring& imagePath,
-    float x, float y, float width, float height,
-    float windowWidth, float windowHeight,
-    std::function<void()> fn)
-    : key(key), imagePath(imagePath), click(fn)
-{
-    // ウィンドウサイズに対して比率で保持
-    x_ratio = x / windowWidth;
-    y_ratio = y / windowHeight;
-    width_ratio = width / windowWidth;
-    height_ratio = height / windowHeight;
-}
-
-void Button::Check(HWND hwnd) {
-    // 範囲内ならコールバック実行
+// ★★★ 修正箇所: 戻り値を bool に変更し、コールバック実行後に true を返す ★★★
+bool Button::Check(HWND hwnd) {
+    // 範囲内かつコールバックが設定されている場合のみ実行
     if (AreaCheck(hwnd) && click) {
         click();
+        // コールバックが実行されたことを示す
+        return true;
     }
+    // クリックされなかったか、コールバックが設定されていなかった
+    return false;
 }

@@ -125,6 +125,7 @@ private:
 		D3D12_VERTEX_BUFFER_VIEW vertexView;
 		D3D12_INDEX_BUFFER_VIEW indexView;
 		D3D12_GPU_DESCRIPTOR_HANDLE srvHandle;
+		UINT srvIndex = 0;
 		float x, y, width, height;
 		DirectX::XMMATRIX transformMatrix;
 		DirectX::XMMATRIX scaleMatrix;
