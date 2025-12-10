@@ -85,6 +85,8 @@ private:
 	UINT descriptorSizeCBVSRV_ = 0; // 追加: ディスクリプタ増分サイズ
 	UINT nextSrvIndex_ = 0;         // 追加: 次に割り当てる SRV インデックス
 
+	std::vector<UINT> freeSrvIndices_;
+
 	ComPtr<ID3D12Resource> renderTargets_[kFrameCount]; // バックバッファー
 
 	ComPtr<ID3D12PipelineState> pipelinestate_;         // パイプラインステート

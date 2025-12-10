@@ -424,13 +424,20 @@ void DXApplication::InitializeTexture(
 	UINT index;
 	if (existingIt != textures_.end()) {
 		// 既存の場合: 既存のインデックスを再利用
-		// (TextureResourceに srvIndex メンバーが存在することを前提とします)
 		index = existingIt->second.srvIndex;
 	}
 	else {
-		// 新規の場合: 次のインデックスを使用し、インクリメント
-		index = nextSrvIndex_;
-		nextSrvIndex_++;
+		// ★修正：新規の場合、空きリストを優先して利用する
+		if (!freeSrvIndices_.empty()) {
+			// 空きリストからインデックスを取得し、リストから削除
+			index = freeSrvIndices_.back();
+			freeSrvIndices_.pop_back();
+		}
+		else {
+			// 空きがなければ、次に新規割り当てされるインデックスを使用し、インクリメント
+			index = nextSrvIndex_;
+			nextSrvIndex_++;
+		}
 	}
 
 	if (index >= basicHeap_->GetDesc().NumDescriptors) ThrowIfFailed(E_FAIL);
@@ -673,6 +680,10 @@ void DXApplication::ReleaseTexture(const std::wstring& key)
 {
 	auto it = textures_.find(key);
 	if (it != textures_.end()) {
+		if (it->second.srvIndex < nextSrvIndex_) {
+			freeSrvIndices_.push_back(it->second.srvIndex);
+		}
+
 		it->second.texture.Reset();
 		it->second.vertexBuffer.Reset();
 		it->second.indexBuffer.Reset();
