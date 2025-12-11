@@ -2,18 +2,22 @@
 #include <string>
 #include <functional>
 #include <windows.h>
+#include "Constants.h"
 
 class Button {
 public:
     Button() = default;
     Button(const std::wstring& k, const std::wstring& img,
         float x, float y, float w, float h,
-        float windowW, float windowH,
+        // 起動時のウィンドウサイズ (windowW, windowH) は比率計算には不要なため削除
+        // float windowW, float windowH, 
         std::function<void()> fn)
         : key(k), imagePath(img),
-        x_ratio(x / windowW), y_ratio(y / windowH),
-        width_ratio(w / windowW), height_ratio(h / windowH),
-        click(fn) {}
+        // 【修正点】比率の計算に常に固定の基準サイズを使用する
+        x_ratio(x / BASE_WINDOW_WIDTH), y_ratio(y / BASE_WINDOW_HEIGHT),
+        width_ratio(w / BASE_WINDOW_WIDTH), height_ratio(h / BASE_WINDOW_HEIGHT),
+        click(fn) {
+    }
 
     bool AreaCheck(HWND hwnd);
     bool Check(HWND hwnd);

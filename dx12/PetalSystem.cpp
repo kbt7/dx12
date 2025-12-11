@@ -108,3 +108,8 @@ void PetalSystem::ResetPetal(Petal& p) {
     p.rotation = distRotation(rng_);
     p.rotationSpeed = distRotationSpeed(rng_);
 }
+
+void PetalSystem::setWindowSize(int width, int height) {
+    windowWidth_ = width;
+    windowHeight_ = height;
+}

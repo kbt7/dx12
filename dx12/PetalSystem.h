@@ -13,8 +13,9 @@ public:
     void Render();
     void Clear(); // 花びらを全消去
     void StartFadeOut(float duration); // フェードアウト開始
+    void setWindowSize(int width, int height);
 
-        bool IsFadingOut() const { return fadingOut_; }
+    bool IsFadingOut() const { return fadingOut_; }
     bool IsFinished() const { return fadingOut_ && fadeTimer_ >= fadeDuration_; }
 
 private:

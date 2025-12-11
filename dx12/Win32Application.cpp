@@ -7,6 +7,10 @@
 #include <locale>  // std::locale
 #include <windows.h> // Win32 APIの基本
 #include <commctrl.h> // Editコントロール用
+#include "Constants.h"
+
+const float BASE_WINDOW_WIDTH = 1280.0f;
+const float BASE_WINDOW_HEIGHT = 720.0f;
 
 // Win32Application静的メンバの定義（クラス外での実体定義）
 Win32Application::GameState Win32Application::gs_ = Win32Application::TITLE;
@@ -14,6 +18,7 @@ DXApplication* Win32Application::dxApp_ = nullptr;
 HWND Win32Application::hDetailText_ = nullptr;
 HINSTANCE Win32Application::s_hInstance = nullptr;
 HWND Win32Application::s_hwnd = nullptr;
+PetalSystem* petalSystem_ = nullptr;
 
 // ★ 新規追加: GoToPlay と GoToTavern の静的メンバの定義
 std::function<void()> Win32Application::GoToPlay_ = nullptr;
@@ -43,10 +48,20 @@ void InitScene_Title(DXApplication* dxApp, PetalSystem& petalSystem) {
 
 	// タイトルボタン
 	std::wstring titleButton = L"titleButton";
+
+	// 【修正】CreateButton を使用してボタン生成を簡略化
+	dxApp->CreateButton(
+		titleButton, L"Assets/Image/titleButton.png",
+		BASE_WINDOW_WIDTH / 2 - 150.0f, BASE_WINDOW_HEIGHT / 2 + 100.0f,
+		300.0f, 100.0f,
+		[]() {} // コールバックは後で設定
+	);
+	// 既存の InitializeTexture は CreateButton の中で実行されるため削除（またはコメントアウト）
+	/*
 	dxApp->buttons[titleButton] = Button(
 		titleButton, L"Assets/Image/titleButton.png",
-		dxApp->GetWindowWidth() / 2 - 150.0f, dxApp->GetWindowHeight() / 2 + 100.0f,
-		300.0f, 100.0f, dxApp->GetWindowWidth(), dxApp->GetWindowHeight(),
+		BASE_WINDOW_WIDTH / 2 - 150.0f, BASE_WINDOW_HEIGHT / 2 + 100.0f,
+		300.0f, 100.0f,
 		[]() {} // コールバックは後で設定
 	);
 
@@ -58,6 +73,7 @@ void InitScene_Title(DXApplication* dxApp, PetalSystem& petalSystem) {
 		dxApp->buttons[titleButton].getWidthAbs(dxApp->GetWindowWidth()),
 		dxApp->buttons[titleButton].getHeightAbs(dxApp->GetWindowHeight()),
 		0.5f);
+	*/
 
 	// BGM・効果音
 	dxApp->engine_.LoadBGM(L"title", L"Assets/Audio/maou_bgm_karaoke_01_flower.mp3");
@@ -87,32 +103,29 @@ void InitScene_Play(DXApplication* dxApp, PetalSystem& petalSystem) {
 	// 3つのボタンを配置
 	float btnW = 200.0f;
 	float btnH = 80.0f;
-	float startX = (dxApp->GetWindowWidth() - (btnW * 3 + 40.0f)) / 2.0f;
-	float y = dxApp->GetWindowHeight() * 0.7f;
+	float startX = (BASE_WINDOW_WIDTH - (btnW * 3 + 40.0f)) / 2.0f;
+	float y = BASE_WINDOW_HEIGHT * 0.7f;
 
 	// 冒険ボタン
 	std::wstring advBtn = L"btn_adventure";
-	dxApp->buttons[advBtn] = Button(advBtn, L"Assets/Image/Button_Adventure.png",
-		startX, y, btnW, btnH, dxApp->GetWindowWidth(), dxApp->GetWindowHeight(),
+	// 【修正】CreateButton を使用
+	dxApp->CreateButton(advBtn, L"Assets/Image/Button_Adventure.png",
+		startX, y, btnW, btnH,
 		[]() { /* 冒険処理 */ });
-	dxApp->InitializeTexture(advBtn, L"Assets/Image/Button_Adventure.png",
-		startX, y, btnW, btnH, 1.0f);
 
 	// 酒場ボタン
 	std::wstring pubBtn = L"btn_pub";
-	dxApp->buttons[pubBtn] = Button(pubBtn, L"Assets/Image/Button_Pub.png",
-		startX + btnW + 20.0f, y, btnW, btnH, dxApp->GetWindowWidth(), dxApp->GetWindowHeight(),
+	// 【修正】CreateButton を使用
+	dxApp->CreateButton(pubBtn, L"Assets/Image/Button_Pub.png",
+		startX + btnW + 20.0f, y, btnW, btnH,
 		[]() { /* 酒場処理 - コールバックはRun内で上書き */ });
-	dxApp->InitializeTexture(pubBtn, L"Assets/Image/Button_Pub.png",
-		startX + btnW + 20.0f, y, btnW, btnH, 1.0f);
 
 	// セーブボタン
 	std::wstring saveBtn = L"btn_save";
-	dxApp->buttons[saveBtn] = Button(saveBtn, L"Assets/Image/Button_Save.png",
-		startX + (btnW + 20.0f) * 2, y, btnW, btnH, dxApp->GetWindowWidth(), dxApp->GetWindowHeight(),
+	// 【修正】CreateButton を使用
+	dxApp->CreateButton(saveBtn, L"Assets/Image/Button_Save.png",
+		startX + (btnW + 20.0f) * 2, y, btnW, btnH,
 		[]() { /* セーブ処理 */ });
-	dxApp->InitializeTexture(saveBtn, L"Assets/Image/Button_Save.png",
-		startX + (btnW + 20.0f) * 2, y, btnW, btnH, 1.0f);
 }
 
 
@@ -142,20 +155,20 @@ void InitScene_Tavern(DXApplication* dxApp, std::function<void(const std::wstrin
 		// units.txtの画像パスにはフォルダが含まれていないため付与する
 		std::wstring fullPath = L"Assets/Image/images/" + unit.imagePath;
 
-		// ボタン作成
-		dxApp->buttons[btnKey] = Button(
+		// 【修正】CreateButton を使用
+		dxApp->CreateButton(
 			btnKey, fullPath,
-			x, y, size, size, dxApp->GetWindowWidth(), dxApp->GetWindowHeight(),
+			x, y, size, size,
 			[onUnitSelect, unit]() {
 				// このユニットが選択された時の処理を実行
 				onUnitSelect(unit.id);
 			}
 		);
 
-		// テクスチャ読み込み
-		dxApp->InitializeTexture(btnKey, fullPath, x, y, size, size, 1.0f);
-
 		// 配置座標の更新 (折り返し処理)
+		// ここでのウィンドウ幅は dxApp->GetWindowWidth() を使用しているため、
+		// InitScene_Tavern実行時のウィンドウサイズに依存するが、
+		// 描画がRunループで動的に修正されるため、ここではこのロジックを維持する。
 		x += size + gap;
 		if (x + size > dxApp->GetWindowWidth() * 0.6f) { // 画面の左側6割くらいにリスト表示
 			x = 50.0f;
@@ -166,13 +179,15 @@ void InitScene_Tavern(DXApplication* dxApp, std::function<void(const std::wstrin
 	// 「戻る」ボタン
 	std::wstring backBtn = L"btn_back";
 	// 戻るボタン用の画像読み込み（既存のアセットを流用）
-	dxApp->buttons[backBtn] = Button(backBtn, L"Assets/Image/Button_Adventure.png",
-		dxApp->GetWindowWidth() - 250.0f, dxApp->GetWindowHeight() - 100.0f, 200.0f, 80.0f,
-		dxApp->GetWindowWidth(), dxApp->GetWindowHeight(),
+	// 【修正】CreateButton を使用し、常に基準座標を渡す
+	dxApp->CreateButton(backBtn, L"Assets/Image/Button_Adventure.png",
+		BASE_WINDOW_WIDTH - 250.0f, BASE_WINDOW_HEIGHT - 100.0f, 200.0f, 80.0f,
 		[]() {}); // コールバックはRun内で設定
 
+	/* 既存のInitializeTextureを削除 (CreateButton内で実行)
 	dxApp->InitializeTexture(backBtn, L"Assets/Image/Button_Adventure.png",
 		dxApp->GetWindowWidth() - 250.0f, dxApp->GetWindowHeight() - 100.0f, 200.0f, 80.0f, 1.0f);
+	*/
 }
 
 void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
@@ -225,6 +240,7 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
 	}
 
 	PetalSystem petalSystem(dxApp, dxApp->GetWindowWidth(), dxApp->GetWindowHeight());
+	petalSystem_ = &petalSystem;
 	InitScene_Title(dxApp, petalSystem);
 	gs_ = Win32Application::TITLE;
 
@@ -258,15 +274,53 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
 			Unit* u = Game::GetInstance()->GetUnit(id);
 			if (u) {
 				// ... (詳細テキストの生成処理)
+				std::wstring localizedSex = u->sex;
+				if (u->sex == L"Male" || u->sex == L"male") {
+					localizedSex = L"男性";
+				}
+				else if (u->sex == L"Female" || u->sex == L"female") {
+					localizedSex = L"女性";
+				}
 				std::wstringstream ss;
 				ss.imbue(std::locale(""));
+
+				ss << L"【レベル】 " << u->level << L"  【経験値】 " << u->exp << L"\r\n";
+
 				ss << L"【名前】 " << u->name << L"\r\n"
-					<< L"【種族】 " << u->race << L" / " << u->sex << L"\r\n"
+					<< L"【種族】 " << u->race << L"\r\n"
+					<< L"【性別】 " << localizedSex << L"\r\n"
 					<< L"【HP】 " << u->hp << L"  【MP】 " << u->mp << L"\r\n"
 					// ★ 修正: u->agility を u->speed に変更
-					<< L"【攻撃】 " << u->attack << L"  【防御】 " << u->defence << L"  【素早さ】 " << u->speed << L"\r\n"
-					<< L"【魔力】 " << u->magic << L"  【精神】 " << u->mental << L"\r\n\r\n"
-					<< L"～詳細～\r\n" << u->detail;
+					<< L"【攻撃】 " << u->attack << L"  【防御】 " << u->defence << L"\r\n"
+					<< L"【魔力】 " << u->magic << L"  【精神】 " << u->mental << L"\r\n"
+					<< L"【素早さ】 " << u->speed << L"\r\n"; // ここで一旦改行を入れずに続ける
+
+				if (!u->resistances.empty()) {
+					ss << L"【属性耐性】\r\n";
+
+					for (const auto& r : u->resistances) {
+						// 1. 属性名を日本語に変換
+						std::wstring localizedType = r.type;
+						if (r.type == L"fire") localizedType = L"火";
+						else if (r.type == L"water") localizedType = L"水";
+						else if (r.type == L"ground") localizedType = L"地";
+						else if (r.type == L"air") localizedType = L"風";
+						else if (r.type == L"light") localizedType = L"光";
+						else if (r.type == L"dark") localizedType = L"闇";
+						// (他の属性もあればここに追加)
+
+						// 2. 値をそのまま出力し、パーセント記号を追加
+						ss << L"　・" << localizedType << L": " << r.value << L"%\r\n";
+					}
+					ss << L"\r\n"; // 耐性リストの後に改行を挿入
+				}
+				else {
+					ss << L"\r\n"; // 耐性がない場合でも、ステータスの後に改行を挿入
+				}
+
+				// --- ★ ここまで属性耐性の出力ロジック ★ ---
+
+				ss << L"～詳細～\r\n" << u->detail;
 
 				// 既存のテキストコントロールがあれば
 				if (hDetailText_ && IsWindow(hDetailText_)) {
@@ -279,10 +333,18 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
 					hDetailText_ = nullptr;
 				}
 
+				const float currentWidth = dxApp_->GetWindowWidth();
+				const float currentHeight = dxApp_->GetWindowHeight();
+
 				// スクロール可能なテキストコントロール (L"EDIT") を作成
 				hDetailText_ = Win32Application::AddSelectableText(currentHwnd,
-					(int)(dxApp_->GetWindowWidth() * 0.4f), 400,
-					(int)(dxApp_->GetWindowWidth() * 0.55f), 300, ss.str());
+					(int)(currentWidth * 0.4f),
+					// Y: 400px を基準高さ 720px の比率で計算
+					(int)(currentHeight * (400.0f / BASE_WINDOW_HEIGHT)),
+					(int)(currentWidth * 0.55f),
+					// 高さ: 300px を基準高さ 720px の比率で計算
+					(int)(currentHeight * (300.0f / BASE_WINDOW_HEIGHT)),
+					ss.str());
 
 				// テキストコントロールの切り替え後、親ウィンドウの再描画を強制
 				InvalidateRect(currentHwnd, NULL, TRUE);
@@ -292,8 +354,22 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
 				std::wstring fullPath = L"Assets/Image/images/" + u->imagePath;
 				// 既存のテクスチャがあれば解放してから再初期化
 				dxApp_->ReleaseTexture(textureKey);
+
+				// テクスチャの座標とサイズを比率で計算
+				// ここは InitScene_Tavern 内で、InitializeTextureに渡す初期値として
+				// 拡大された絶対座標を渡している。DrawTextureはRunループで動的に呼ばれる
+				// わけではないため、InitializeTextureで最終的な絶対座標を渡す形となる。
+				// テクスチャの座標はWM_SIZEで更新されないため、この処理は正しい。
 				dxApp_->InitializeTexture(textureKey, fullPath,
-					dxApp_->GetWindowWidth() - 350.0f, 50.0f, 300.0f, 300.0f, 1.0f);
+					// X: 右端から 350px 相当
+					currentWidth - (currentWidth * (350.0f / BASE_WINDOW_WIDTH)),
+					// Y: 50px を基準高さ 720px の比率で計算
+					currentHeight * (50.0f / BASE_WINDOW_HEIGHT),
+					// 幅: 300px を基準幅 1280px の比率で計算
+					currentWidth * (300.0f / BASE_WINDOW_WIDTH),
+					// 高さ: 300px を基準高さ 720px の比率で計算
+					currentHeight * (300.0f / BASE_WINDOW_HEIGHT),
+					1.0f);
 			}
 			});
 
@@ -326,7 +402,7 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
 		}
 		dxApp_->ReleaseTexture(L"selected_face");
 
-		// 【追加】酒場画面のリソース解放後、メインウィンドウの再描画を強制 
+		// 【追加】酒場画面のリソース解放後、メインウィンドウの再描画を強制 
 		if (s_hwnd) { InvalidateRect(s_hwnd, NULL, TRUE); }
 
 		// 酒場画面で作成された動的なテクスチャ（ユニットアイコン、btn_back）をここで解放
@@ -390,6 +466,7 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
 				dxApp->ReleaseTexture(L"titleButton");
 				dxApp->buttons.clear();
 				petalSystem.Clear();
+				petalSystem_ = nullptr;
 				titleResourcesReleased = true; // 解放済みフラグを立てる
 				// 静的メンバの GoToPlay_ を使用する
 				if (Win32Application::GoToPlay_) {
@@ -424,6 +501,30 @@ void Win32Application::Run(DXApplication* dxApp, HINSTANCE hInstance) {
 				}
 			}
 		}
+
+		// ★★★ 【修正/追加】ボタンの描画処理をRunループ内に挿入 ★★★
+		// 描画は常に現在のウィンドウサイズに合わせて絶対座標を計算し直す
+		float currentW = dxApp->GetWindowWidth();
+		float currentH = dxApp->GetWindowHeight();
+
+		for (auto& btPair : dxApp->buttons) {
+			auto& button = btPair.second;
+
+			// DrawTexture に、現在のウィンドウサイズに対応した絶対座標とサイズを渡す
+			// これにより、画面拡大・縮小に追従して画像が正しく描画される
+			dxApp->DrawTexture(
+				button.getKey(),
+				button.getXAbs(currentW),
+				button.getYAbs(currentH),
+				button.getWidthAbs(currentW),
+				button.getHeightAbs(currentH),
+				dxApp->GetTextureAlpha(button.getKey()),      // alpha: 現在の値を取得
+				dxApp->GetTextureBrightness(button.getKey()), // brightness: 現在の値を取得
+				0.0f,   // rotation: 現在の値を取得
+				dxApp->GetTextureVisible(button.getKey())     // visible: 現在の値を取得
+			);
+		}
+		// ★★★ 描画ロジックの修正/追加終わり ★★★
 
 		dxApp->OnRender();
 	}
@@ -463,7 +564,43 @@ LRESULT CALLBACK Win32Application::WindowProc(HWND hwnd, UINT msg, WPARAM wp, LP
 		}
 		return 0;
 	}
-					   // ★★★ WM_CTLCOLORSTATIC の処理は不要 (L"STATIC"を排除するため) ★★★
+	case WM_SIZE:
+	{
+		// ウィンドウが最小化されている場合は処理しない
+		if (wp == SIZE_MINIMIZED)
+		{
+			return 0;
+		}
+
+		// 新しいクライアント領域の幅と高さを取得
+		int newWidth = LOWORD(lp);
+		int newHeight = HIWORD(lp);
+
+		if (petalSystem_) {
+			petalSystem_->setWindowSize(newWidth, newHeight);
+		}
+
+		// 2. Win32 テキストコントロール (hDetailText_) の位置とサイズを更新
+		if (hDetailText_)
+		{
+			// X 座標: ウィンドウ幅の 40%
+			int x = (int)(newWidth * 0.4f);
+
+			// Y 座標 (初期値 400px 相当): 基準高さに対する比率で計算
+			int y = (int)(newHeight * (400.0f / BASE_WINDOW_HEIGHT));
+
+			// 幅: ウィンドウ幅の 55%
+			int w = (int)(newWidth * 0.55f);
+
+			// 高さ (初期値 300px 相当): 基準高さに対する比率で計算
+			int h = (int)(newHeight * (300.0f / BASE_WINDOW_HEIGHT));
+
+			// コントロールの位置とサイズを更新
+			MoveWindow(hDetailText_, x, y, w, h, TRUE);
+		}
+	}
+	return 0;
+	// ★★★ WM_CTLCOLORSTATIC の処理は不要 (L"STATIC"を排除するため) ★★★
 	case WM_DESTROY:
 		// メインウィンドウが破棄されたとき、静的HWNDを無効化
 		if (hwnd == s_hwnd) {

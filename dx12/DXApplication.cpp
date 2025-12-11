@@ -734,17 +734,62 @@ void DXApplication::DrawTexture(
 	SetTextureVisible(key, visible);
 	if (!visible) return;
 
-	// 位置とサイズを更新
+	// 1. 位置とサイズ、およびそれに伴うNDC変換行列を更新 (ここで定数バッファも更新される)
+	//    → SetTexturePosition の内部で NDC 座標計算と定数バッファの更新を行う
 	SetTexturePosition(key, x, y, width, height);
 
-	// 回転を更新
+	// 2. 回転を更新
+	//    → SetTextureRotation の内部で rotationMatrix と transformMatrix を更新し、定数バッファを更新
 	if (rotation != 0.0f) {
 		SetTextureRotation(key, rotation);
 	}
-	else {
-		InitializeTextureTransform(key); // 回転しない場合でも transform を更新
-	}
+	// rotation が 0.0f の場合、何もしない（前回の rotationMatrix を維持）。
+	// 回転をリセットしたいなら、ここで SetTextureRotation(key, 0.0f) を呼ぶべき。
 
-	// 明るさとアルファを更新
+	// 3. 明るさとアルファを更新
 	SetTextureBrightnessAndAlpha(key, brightness, alpha);
+
+	// 4. 描画コマンド (この関数には含まれていないが、DrawTextureの本来の仕事)
+}
+
+void DXApplication::CreateButton(
+	const std::wstring& key,
+	const std::wstring& imagePath,
+	float x, float y, float w, float h,
+	std::function<void()> callback)
+{
+	// 1. Button オブジェクトを生成し、マップに格納
+	//    Buttonコンストラクタは、x, y, w, h を基準サイズ(1280x720)と見なして比率を計算する
+	this->buttons[key] = Button(
+		key, imagePath,
+		x, y, w, h,
+		callback
+	);
+
+	// 2. DXApplicationのテクスチャを初期化
+	//    InitScene_Playと同様に、初期座標として基準座標をそのまま利用
+	//    ※重要: この座標は初期値として格納されるだけで、
+	//           実際の描画はRun()ループ内で比率に基づいて動的に計算される前提
+	InitializeTexture(
+		key, imagePath,
+		x, y, // 基準座標をそのまま初期値として渡す
+		w, h, // 基準サイズをそのまま初期値として渡す
+		1.0f  // 初期アルファ値
+	);
+}
+
+// テクスチャの現在のアルファ値を取得
+float DXApplication::GetTextureAlpha(const std::wstring& key) const {
+	auto it = textures_.find(key);
+	// 見つからない場合は初期値の 1.0f を返す（DXApplication::InitializeTextureで設定された値）
+	if (it == textures_.end()) return 1.0f;
+	return it->second.alpha;
+}
+
+// テクスチャの現在の輝度を取得
+float DXApplication::GetTextureBrightness(const std::wstring& key) const {
+	auto it = textures_.find(key);
+	// 見つからない場合は初期値の 1.0f を返す
+	if (it == textures_.end()) return 1.0f;
+	return it->second.brightness;
 }

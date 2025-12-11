@@ -52,6 +52,9 @@ public:
 	void SetTextureVisible(const std::wstring& key, bool visible);
 	void ReleaseTexture(const std::wstring& key);
 
+	float GetTextureAlpha(const std::wstring& key) const;
+	float GetTextureBrightness(const std::wstring& key) const;
+
 	AudioEngine engine_;
 	std::map<std::wstring, Button> buttons;
 	void SetTextureBrightnessAndAlpha(const std::wstring& key, float brightness, float alpha);
@@ -63,6 +66,12 @@ public:
 		float brightness,
 		float rotation,
 		bool visible);
+
+	void CreateButton(
+		const std::wstring& key,
+		const std::wstring& imagePath,
+		float x, float y, float w, float h,
+		std::function<void()> callback);
 private:
 	static const unsigned int kFrameCount = 2;
 
